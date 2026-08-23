@@ -1,3 +1,7 @@
-README.md
-*.pkl
-*.csv
+.env             ← ignored
+*.pkl            ← ignored
+*.csv            ← ignored
+*.ipynb_checkpoints/ ← ignored
+*.index          ← ignored
+__pycache__/     ← ignored
+venv/            ← ignored
