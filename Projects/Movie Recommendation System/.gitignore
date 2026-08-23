@@ -5,3 +5,4 @@
 *.index          ← ignored
 __pycache__/     ← ignored
 venv/            ← ignored
+.pkl
