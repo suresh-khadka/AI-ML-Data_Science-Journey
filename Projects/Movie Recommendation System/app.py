@@ -102,29 +102,67 @@ def recommend_movies_reranked(title, movies_df, sim_matrix, meta_df, top_n=5, ca
     reranked = sorted(results, key=lambda r: (1 - weight) * r[1] + weight * (r[2] / max_pop), reverse=True)
     return [r[0] for r in reranked[:top_n]]
 
-# App UI
-st.title("Movie Recommender System")
+# Import chatbot function
+from chatbot import ask_chatbot
 
-# Searchable dropdown
-selected_movie = st.selectbox(
-    "Select a movie",
-    options=movies['title'].values,
-    index=0
-)
+# App UI with tabs
+tab1, tab2 = st.tabs(["Recommender", "Ask about movies"])
 
-# Recommend button
-if st.button("Recommend", type="primary", use_container_width=True):
-    with st.spinner("Finding recommendations..."):
-        recommended_titles = recommend_movies_reranked(selected_movie, movies, similarity, meta, top_n=5)
-        # Get movie ids in the same order
-        title_to_id = dict(zip(movies['title'], movies['movie_id']))
-        recommended_ids = [title_to_id[title] for title in recommended_titles]
+with tab1:
+    st.title("Movie Recommender System")
+    # Searchable dropdown
+    selected_movie = st.selectbox(
+        "Select a movie",
+        options=movies['title'].values,
+        index=0
+    )
 
-    if recommended_titles:
-        # Display results in 5 columns
-        cols = st.columns(5)
-        for col, title, movie_id in zip(cols, recommended_titles, recommended_ids):
-            with col:
-                poster_url = fetch_poster(movie_id)
-                st.image(poster_url, use_container_width=True)
-                st.caption(title)
+    # Recommend button
+    if st.button("Recommend", type="primary", use_container_width=True):
+        with st.spinner("Finding recommendations..."):
+            recommended_titles = recommend_movies_reranked(selected_movie, movies, similarity, meta, top_n=5)
+            # Get movie ids in the same order
+            title_to_id = dict(zip(movies['title'], movies['movie_id']))
+            recommended_ids = [title_to_id[title] for title in recommended_titles]
+
+        if recommended_titles:
+            # Display results in 5 columns
+            cols = st.columns(5)
+            for col, title, movie_id in zip(cols, recommended_titles, recommended_ids):
+                with col:
+                    poster_url = fetch_poster(movie_id)
+                    st.image(poster_url, use_container_width=True)
+                    st.caption(title)
+
+with tab2:
+    st.header("Ask about movies")
+    # Initialize chat history
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    # Display chat messages
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+    # User input
+    if prompt := st.chat_input("Ask about movies..."):
+        # Add user message to chat history
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        # Get bot response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                # Convert session state messages to chat history format expected by ask_chatbot
+                # Map roles: "assistant" -> "model" for Gemini compatibility
+                history = []
+                for m in st.session_state.chat_history:
+                    role = m["role"]
+                    if role == "assistant":
+                        role = "model"
+                    history.append({"role": role, "parts": [m["content"]]})
+                answer, timings = ask_chatbot(prompt, chat_history=history)
+                st.markdown(answer)
+                st.caption(f"⏱️ {timings['total']:.1f}s via {timings['provider']} "f"(retrieval: {timings['retrieval']:.1f}s, generation: {timings['gemini_call']:.1f}s)")
+        # Add assistant message to chat history
+        st.session_state.chat_history.append({"role": "assistant", "content": answer})
