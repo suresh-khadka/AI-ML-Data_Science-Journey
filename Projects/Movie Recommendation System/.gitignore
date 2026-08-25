@@ -1,8 +1,8 @@
-.env             ← ignored
-*.pkl            ← ignored
-*.csv            ← ignored
-*.ipynb_checkpoints/ ← ignored
-*.index          ← ignored
-__pycache__/     ← ignored
-venv/            ← ignored
+.env            
+*.pkl           
+*.csv          
+*.ipynb_checkpoints/ 
+*.index         
+__pycache__/    
+venv/           
 .pkl

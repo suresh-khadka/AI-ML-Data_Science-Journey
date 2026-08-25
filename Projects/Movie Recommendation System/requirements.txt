@@ -5,3 +5,4 @@ scikit-learn
 requests
 sentence-transformers
 google-generativeai
+python-dotenv
