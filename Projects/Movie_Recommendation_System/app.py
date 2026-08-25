@@ -2,6 +2,7 @@ import streamlit as st
 import pickle
 import requests
 import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Load .env file if exists
 def load_env():
@@ -22,9 +23,9 @@ st.set_page_config(layout="wide", page_title="Movie Recommender")
 # Load data with caching
 @st.cache_resource
 def load_data():
-    movies = pickle.load(open('movies_final.pkl', 'rb'))
-    similarity = pickle.load(open('similarity_sbert.pkl', 'rb'))
-    meta = pickle.load(open('meta.pkl', 'rb'))  # loaded for potential use
+    movies = pickle.load(open(os.path.join(BASE_DIR, 'movies_final.pkl'), 'rb'))
+    similarity = pickle.load(open(os.path.join(BASE_DIR, 'similarity_sbert.pkl'), 'rb'))
+    meta = pickle.load(open(os.path.join(BASE_DIR, 'meta.pkl'), 'rb'))
     return movies, similarity, meta
 
 movies, similarity, meta = load_data()

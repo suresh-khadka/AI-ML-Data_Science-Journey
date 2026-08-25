@@ -3,6 +3,8 @@ import pickle
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @st.cache_resource
 def get_model():
@@ -10,9 +12,9 @@ def get_model():
 
 @st.cache_data
 def get_data():
-    movies = pickle.load(open('movies_final.pkl', 'rb'))
-    meta = pickle.load(open('meta.pkl', 'rb'))
-    movie_embeddings = pickle.load(open('sbert_embeddings.pkl', 'rb'))  # precomputed, not recalculated
+    movies = pickle.load(open(os.path.join(BASE_DIR, 'movies_final.pkl'), 'rb'))
+    meta = pickle.load(open(os.path.join(BASE_DIR, 'meta.pkl'), 'rb'))
+    movie_embeddings = pickle.load(open(os.path.join(BASE_DIR, 'sbert_embeddings.pkl'), 'rb'))
     return movies, meta, movie_embeddings
 
 def retrieve_movies(question, top_k=8):
