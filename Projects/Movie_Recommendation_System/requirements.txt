@@ -6,4 +6,5 @@ sentence-transformers
 google-generativeai
 groq
 python-dotenv
-requests
+requests 
+rapidfuzz

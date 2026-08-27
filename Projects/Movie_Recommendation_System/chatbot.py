@@ -54,6 +54,10 @@ def ask_chatbot(question, chat_history=None):
     "If the movies shown to you this turn truly lack relevant options (e.g. wrong genre, "
     "wrong era), say so honestly, but phrase it as 'none of the retrieved movies matched' "
     "rather than 'the dataset does not contain'."
+    "If the user's spelling of a title seems close to a real movie's title, assume they meant "
+    "that movie, even with minor typos."
+    "When the data provided represents a true full-dataset ranking (e.g. for 'highest rated' "
+    "or 'most popular' questions), you may state the result with confidence."
     )
 
     user_prompt = f"""Context:

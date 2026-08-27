@@ -20,7 +20,22 @@ def get_data():
 
 import re
 
-def retrieve_movies(question, top_k=8):
+superlative_keywords = {
+    'highest rated': ('vote_average', False),
+    'best': ('vote_average', False),
+    'top rated': ('vote_average', False),
+    'lowest rated': ('vote_average', True),
+    'worst': ('vote_average', True),
+    'most popular': ('popularity', False),
+    'longest': ('runtime', False),
+    'shortest': ('runtime', True),
+} 
+def detect_superlative(question_lower):
+    for phrase, (column, ascending) in superlative_keywords.items():
+        if phrase in question_lower:
+            return column, ascending
+    return None, None
+def retrieve_movies(question, top_k=20):
     """
     Retrieve top-k movies similar to a user question using SBERT embeddings,
     with exact title matching and deterministic year/genre filtering applied first.
@@ -50,8 +65,37 @@ def retrieve_movies(question, top_k=8):
                 'rating': 0.0
             }
 
+    # 0. Handle superlative questions with a true full-dataset sort (bypasses everything below)
+    column, ascending = detect_superlative(question_lower)
+    if column:
+        sorted_meta = meta.sort_values(column, ascending=ascending).head(top_k)
+        for _, meta_row_single in sorted_meta.iterrows():
+            movie_row = movies[movies['movie_id'] == meta_row_single['movie_id']]
+            if movie_row.empty:
+                continue
+            idx = movie_row.index[0]
+            matched_indices.add(idx)
+            results.append(build_result(idx, meta[meta['movie_id'] == meta_row_single['movie_id']]))
+        return results
+
     # 1. Exact/near title match first
-    title_matches = movies[movies['title'].str.lower().apply(lambda t: t in question_lower)]
+    from rapidfuzz import fuzz
+
+# 1. Exact/near title match first (fuzzy, tolerant of typos)
+    def title_in_question(title, question_lower, threshold=85):
+        title_lower = title.lower()
+        if title_lower in question_lower:
+            return True
+        # Check fuzzy match against sliding windows of the question
+        words = question_lower.split()
+        for window_size in range(1, min(len(title_lower.split()) + 2, len(words) + 1)):
+            for i in range(len(words) - window_size + 1):
+                phrase = ' '.join(words[i:i+window_size])
+                if fuzz.ratio(title_lower, phrase) >= threshold:
+                    return True
+        return False
+
+    title_matches = movies[movies['title'].apply(lambda t: title_in_question(t, question_lower))]
     if not title_matches.empty:
         for idx in title_matches.index:
             matched_indices.add(idx)
@@ -122,4 +166,4 @@ def retrieve_movies(question, top_k=8):
     return results
 if __name__ == '__main__':
     q = "a thrilling adventure movie with superheroes"
-    print(retrieve_movies(q, top_k=5))
+    print(retrieve_movies(q, top_k=20))
