@@ -58,6 +58,8 @@ def ask_chatbot(question, chat_history=None):
     "that movie, even with minor typos."
     "When the data provided represents a true full-dataset ranking (e.g. for 'highest rated' "
     "or 'most popular' questions), you may state the result with confidence."
+    "When reporting 'highest rated' movies, note that ratings reflect TMDB user scores and results "
+    "exclude movies with very few votes to avoid statistical outliers."
     )
 
     user_prompt = f"""Context:

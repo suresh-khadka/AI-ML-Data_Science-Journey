@@ -85,7 +85,12 @@ def retrieve_movies(question, top_k=20):
     # 0. Handle superlative questions with a true full-dataset sort (bypasses everything below)
     column, ascending = detect_superlative(question_lower)
     if column:
-        sorted_meta = meta.sort_values(column, ascending=ascending).head(top_k)
+        if column == 'vote_average':
+            # Exclude low-vote-count outliers (e.g. a movie with 1 vote of 10.0)
+            eligible = meta[meta['vote_count'] >= 50]
+            sorted_meta = eligible.sort_values(column, ascending=ascending).head(top_k)
+        else:
+            sorted_meta = meta.sort_values(column, ascending=ascending).head(top_k)
         for _, meta_row_single in sorted_meta.iterrows():
             movie_row = movies[movies['movie_id'] == meta_row_single['movie_id']]
             if movie_row.empty:
@@ -180,7 +185,9 @@ def retrieve_movies(question, top_k=20):
 
     return results
 
-    return results
 if __name__ == '__main__':
-    q = "a thrilling adventure movie with superheroes"
-    print(retrieve_movies(q, top_k=20))
+    q = "give me highest rating movies"
+    results = retrieve_movies(q, top_k=20)
+    for r in results:
+        print(r['title'], r['rating'])
+
