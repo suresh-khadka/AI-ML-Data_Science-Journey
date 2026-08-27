@@ -22,19 +22,36 @@ import re
 
 superlative_keywords = {
     'highest rated': ('vote_average', False),
-    'best': ('vote_average', False),
+    'highest rating': ('vote_average', False),
+    'highest-rated': ('vote_average', False),
     'top rated': ('vote_average', False),
+    'top-rated': ('vote_average', False),
+    'best rated': ('vote_average', False),
+    'best': ('vote_average', False),
     'lowest rated': ('vote_average', True),
+    'lowest rating': ('vote_average', True),
     'worst': ('vote_average', True),
     'most popular': ('popularity', False),
     'longest': ('runtime', False),
     'shortest': ('runtime', True),
-} 
+}
 def detect_superlative(question_lower):
-    for phrase, (column, ascending) in superlative_keywords.items():
-        if phrase in question_lower:
-            return column, ascending
+    superlative_words = ['highest', 'top', 'best', 'greatest']
+    inferior_words = ['lowest', 'worst']
+    
+    if any(w in question_lower for w in superlative_words) and 'rat' in question_lower:
+        return 'vote_average', False
+    if any(w in question_lower for w in inferior_words) and 'rat' in question_lower:
+        return 'vote_average', True
+    if 'popular' in question_lower and any(w in question_lower for w in superlative_words):
+        return 'popularity', False
+    if 'longest' in question_lower:
+        return 'runtime', False
+    if 'shortest' in question_lower:
+        return 'runtime', True
     return None, None
+
+
 def retrieve_movies(question, top_k=20):
     """
     Retrieve top-k movies similar to a user question using SBERT embeddings,
