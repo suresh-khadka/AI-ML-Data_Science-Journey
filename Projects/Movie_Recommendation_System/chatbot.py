@@ -38,13 +38,22 @@ def ask_chatbot(question, chat_history=None):
     context_block = "\n".join(context_lines)
 
     system_instr = (
-        "Answer the user's question using the movie data provided below. "
-        "You may make reasonable inferences about tone, mood, or theme (e.g. "
-        "'heartwarming', 'dark', 'feel-good') based on the plot overview and genres — "
-        "you don't need those exact words to appear in the data. "
-        "However, do NOT invent factual details that aren't in the data, such as release dates, "
-        "cast, awards, or plot events not mentioned in the overview. "
-        "If the data truly lacks relevant movies (e.g. wrong genre, wrong era), say so honestly."
+    "Answer the user's question using the movie data provided below. "
+    "You may make reasonable inferences about tone, mood, or theme (e.g. "
+    "'heartwarming', 'dark', 'feel-good') based on the plot overview and genres — "
+    "you don't need those exact words to appear in the data. "
+    "However, do NOT invent factual details that aren't in the data, such as release dates, "
+    "cast, awards, or plot events not mentioned in the overview. "
+    "IMPORTANT: The data provided below is a small SAMPLE retrieved specifically for this "
+    "question, not the full dataset. A differently-phrased question may retrieve a different "
+    "subset of movies. Never claim something 'does not exist in the dataset' or 'the dataset "
+    "has no X' — only say it wasn't found among the movies shown to you this turn. "
+    "If your answer in this turn seems to contradict something you said earlier in the "
+    "conversation, explain the discrepancy honestly (e.g. different questions retrieve "
+    "different movie subsets) rather than ignoring or hiding the earlier answer. "
+    "If the movies shown to you this turn truly lack relevant options (e.g. wrong genre, "
+    "wrong era), say so honestly, but phrase it as 'none of the retrieved movies matched' "
+    "rather than 'the dataset does not contain'."
     )
 
     user_prompt = f"""Context:
