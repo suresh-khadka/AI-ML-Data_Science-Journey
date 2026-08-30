@@ -66,7 +66,7 @@ def render_attention_tab():
         )
 
         # Display status
-        if webrtc_ctx.video_transformer:
+        if webrtc_ctx.video_processor:
             status = webrtc_ctx.video_transformer.latest_status
             # Status display with emoji and color
             if status == "OK":

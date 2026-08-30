@@ -2,6 +2,22 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import time
+import os
+import urllib.request
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+
+def download_model(model_path='face_landmarker.task'):
+    """Download the face landmarker model if not present."""
+    if not os.path.exists(model_path):
+        print(f"Downloading face landmarker model to {model_path}...")
+        url = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+        try:
+            urllib.request.urlretrieve(url, model_path)
+            print("Model downloaded successfully.")
+        except Exception as e:
+            print(f"Failed to download model: {e}")
+            raise
 
 class AttentionMonitor:
     """
@@ -20,7 +36,7 @@ class AttentionMonitor:
 
     FRAME_SKIP = 3               # Process every Nth frame for performance
 
-    # MediaPipe FaceMesh landmark indices
+    # MediaPipe FaceMesh landmark indices (same as before)
     LEFT_EYE_IDX = [362, 385, 387, 263, 373, 380]
     RIGHT_EYE_IDX = [33, 160, 158, 133, 153, 144]
     NOSE_IDX = 1
@@ -28,13 +44,16 @@ class AttentionMonitor:
     RIGHT_FACE_IDX = 454  # approximate right cheek
 
     def __init__(self):
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
+        # Ensure model is downloaded
+        download_model()
+
+        # Set up MediaPipe FaceLandmarker
+        base_options = python.BaseOptions(model_asset_path='face_landmarker.task')
+        options = vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            running_mode=vision.RunningMode.IMAGE,
+            num_faces=1)
+        self.face_landmarker = vision.FaceLandmarker.create_from_options(options)
 
         # State tracking
         self.ear_below_counter = 0
@@ -96,23 +115,26 @@ class AttentionMonitor:
 
         # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.face_mesh.process(rgb_frame)
+        # Convert to MediaPipe Image
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        if not results.multi_face_landmarks:
+        # Detect face landmarks
+        detection_result = self.face_landmarker.detect(mp_image)
+
+        if not detection_result.face_landmarks:
             # No face detected
+            # Reset counters because if face is not visible, we cannot be sleeping or distracted
+            self.ear_below_counter = 0
+            self.head_away_counter = 0
             # Check if we have been absent for too long
             if time.time() - self.last_face_seen_time > self.ABSENT_TIMEOUT:
                 self.last_status = "ABSENT"
-            else:
-                # Still within the grace period, keep last status (could be OK or other)
-                # But if we were previously OK and now no face, we should not immediately change to ABSENT
-                # We'll keep the last status until timeout.
-                pass
+            # else: keep last status (which could be OK, but we just reset counters so it's not SLEEPING/DISTRACTED)
             return self.last_status
 
         # Face detected
         self.last_face_seen_time = time.time()
-        landmarks = results.multi_face_landmarks[0].landmark
+        landmarks = detection_result.face_landmarks[0]
 
         # Calculate EAR for both eyes
         left_ear = self._eye_aspect_ratio(landmarks, self.LEFT_EYE_IDX)
