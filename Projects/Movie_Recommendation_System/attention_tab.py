@@ -1,33 +1,52 @@
-import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-import av
-import cv2
-import numpy as np
-from attention_monitor import AttentionMonitor
-from video_player import attention_aware_video_player
+import threading
 import time
 
-class AttentionTransformer(VideoTransformerBase):
+import av
+import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+
+from attention_monitor import AttentionMonitor
+from video_player import attention_aware_video_player
+
+
+class AttentionProcessor(VideoProcessorBase):
     """
-    Video transformer that processes frames for attention monitoring.
+    Video processor that runs on every incoming webcam frame in a background
+    thread managed by streamlit-webrtc. Uses a lock to safely share the latest
+    status with the main Streamlit render loop.
     """
+
     def __init__(self):
         self.monitor = AttentionMonitor()
+        self._lock = threading.Lock()
         self.latest_status = "OK"
         self.latest_ear = 0.0
         self.latest_head_pose = 0.0
 
-    def transform(self, frame):
-        # Convert frame to numpy array
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img = frame.to_ndarray(format="bgr24")
 
-        # Update attention status
+        # Run detection - AttentionMonitor.update() should return the status
+        # string and also expose last EAR / head pose values for debugging.
         status = self.monitor.update(img)
-        self.latest_status = status
 
-        # For debugging, we could also return the annotated frame
-        # For now, just return the original frame
-        return img
+        with self._lock:
+            self.latest_status = status
+            self.latest_ear = getattr(self.monitor, "last_ear", 0.0)
+            self.latest_head_pose = getattr(self.monitor, "last_head_pose_offset", 0.0)
+
+        # Print to terminal so we can confirm recv() is actually being called
+        # and see live values without relying on the Streamlit UI refreshing.
+        print(f"[ATTENTION] status={status} ear={self.latest_ear:.3f} head_pose={self.latest_head_pose:.3f}")
+
+        # Return the frame unmodified so the webcam preview still shows.
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+    def get_status_snapshot(self):
+        """Thread-safe read of the latest computed values."""
+        with self._lock:
+            return self.latest_status, self.latest_ear, self.latest_head_pose
+
 
 def render_attention_tab():
     """
@@ -35,7 +54,8 @@ def render_attention_tab():
     """
     st.header("🎥 Attention-Aware Playback")
 
-    st.markdown("""
+    st.markdown(
+        """
     This is a local proof-of-concept demonstrating attention-aware video playback.
     The system uses your webcam to detect if you're paying attention to the video:
     - 😴 **SLEEPING**: Eyes closed for sustained period
@@ -45,77 +65,85 @@ def render_attention_tab():
     When inattention is detected, the video pauses with an overlay message.
     When you return to normal viewing state, playback resumes automatically.
 
-    *Note: This feature runs locally only and uses a sample video file (BigBuckBunny_512kb.mp4).
-    It is not connected to the movie recommendation dataset.*
-    """)
+    *Note: This feature runs locally only and uses a sample video file
+    (BigBuckBunny_512kb.mp4). It is not connected to the movie recommendation dataset.*
+    """
+    )
 
-    # Create two columns: left for webcam and status, right for video player
     col1, col2 = st.columns([1, 1])
 
     with col1:
         st.subheader("Webcam Feed")
-        # WebRTC streamer for webcam
         webrtc_ctx = webrtc_streamer(
             key="attention-monitor",
-            video_transformer_factory=AttentionTransformer,
+            video_processor_factory=AttentionProcessor,
             rtc_configuration={
                 "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
             },
             media_stream_constraints={"video": True, "audio": False},
-            async_transform=True,
         )
 
-        # Display status
-        if webrtc_ctx.video_processor is not None and webrtc_ctx.state.playing:
-            status = webrtc_ctx.video_processor.latest_status
-            # Status display with emoji and color
-            if status == "OK":
-                st.success(f"Status: Watching normally ✅")
-            elif status == "SLEEPING":
-                st.error(f"Status: 😴 Sleeping - Eyes closed")
-            elif status == "DISTRACTED":
-                st.warning(f"Status: 👀 Distracted - Looking away")
-            elif status == "ABSENT":
-                st.info(f"Status: 🚶 Absent - No face detected")
-            else:
-                st.write(f"Status: {status}")
-
-            # Optional: Show debug values
-            with st.expander("Debug Values"):
-                processor = webrtc_ctx.video_processor
-                st.write(f"EAR: {processor.latest_ear:.3f}")
-                st.write(f"Head Pose: {processor.latest_head_pose:.3f}")
-        else:
-            st.info("Starting webcam... Please wait for the stream to initialize.")
+        status_placeholder = st.empty()
+        debug_placeholder = st.empty()
 
     with col2:
         st.subheader("Video Player")
-        # Determine if we should pause based on attention status
-        should_pause = False
-        status_message = ""
+        video_placeholder = st.empty()
 
-        if webrtc_ctx.video_processor is not None and webrtc_ctx.state.playing:
-            status = webrtc_ctx.video_processor.latest_status
-            if status == "SLEEPING":
-                should_pause = True
-                status_message = "😴 Paused — you seem to have dozed off"
-            elif status == "DISTRACTED":
-                should_pause = True
-                status_message = "👀 Paused — you seem distracted"
-            elif status == "ABSENT":
-                should_pause = True
-                status_message = "🚶 Paused — no one's watching"
+    # --- Live polling loop -------------------------------------------------
+    # streamlit-webrtc's recv() runs in a background thread. Nothing forces
+    # Streamlit to redraw automatically when that thread's data changes, so
+    # we poll the shared processor state on a short interval and re-render
+    # the placeholders above. This loop only runs while the stream is active.
+    if webrtc_ctx.state.playing:
+        while webrtc_ctx.state.playing:
+            if webrtc_ctx.video_processor is not None:
+                status, ear, head_pose = webrtc_ctx.video_processor.get_status_snapshot()
+
+                with status_placeholder.container():
+                    if status == "OK":
+                        st.success("Status: Watching normally ✅")
+                    elif status == "SLEEPING":
+                        st.error("Status: 😴 Sleeping - Eyes closed")
+                    elif status == "DISTRACTED":
+                        st.warning("Status: 👀 Distracted - Looking away")
+                    elif status == "ABSENT":
+                        st.info("Status: 🚶 Absent - No face detected")
+                    else:
+                        st.write(f"Status: {status}")
+
+                with debug_placeholder.container():
+                    with st.expander("Debug Values", expanded=True):
+                        st.write(f"EAR: {ear:.3f}")
+                        st.write(f"Head Pose Offset: {head_pose:.3f}")
+
+                should_pause = status in ("SLEEPING", "DISTRACTED", "ABSENT")
+                status_messages = {
+                    "SLEEPING": "😴 Paused — you seem to have dozed off",
+                    "DISTRACTED": "👀 Paused — you seem distracted",
+                    "ABSENT": "🚶 Paused — no one's watching",
+                }
+                status_message = status_messages.get(status, "")
+
+                with video_placeholder.container():
+                    attention_aware_video_player(
+                        should_pause=should_pause, status_message=status_message
+                    )
             else:
-                should_pause = False
-                status_message = ""
+                status_placeholder.info("Initializing detector...")
 
-        # Render the video player
-        attention_aware_video_player(should_pause=should_pause, status_message=status_message)
+            time.sleep(0.5)
+    else:
+        status_placeholder.info("Click 'Start' above and allow camera access to begin.")
+        with video_placeholder.container():
+            attention_aware_video_player(should_pause=False, status_message="")
 
-    # Add a note about local-only operation
     st.markdown("---")
-    st.caption("🔒 Local-only proof-of-concept: This feature requires local webcam access and will not work in cloud deployments.")
+    st.caption(
+        "🔒 Local-only proof-of-concept: This feature requires local webcam access "
+        "and will not work in cloud deployments."
+    )
+
 
 if __name__ == "__main__":
-    # For testing the tab independently
     render_attention_tab()

@@ -1,219 +1,120 @@
-import streamlit as streamlit
-import streamlit.components.v1 as components
+import base64
 import os
 
-def attention_aware_video_player(should_pause=False, status_message="", video_path="BigBuckBunny_512kb.mp4"):
+import streamlit as st
+import streamlit.components.v1 as components
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_VIDEO_PATH = os.path.join(BASE_DIR, "BigBuckBunny_512kb.mp4")
+
+
+@st.cache_data
+def _load_video_base64(video_path: str) -> str:
     """
-    Creates an attention-aware video player component.
-
-    Args:
-        should_pause (bool): Whether the video should be paused
-        status_message (str): Message to display in overlay when paused
-        video_path (str): Path to the video file
-
-    Returns:
-        None (renders the component)
+    Read a local video file once and cache it as a base64 string so it can be
+    embedded directly into the HTML component via a data: URL. This avoids
+    relying on Streamlit serving arbitrary local files, which components.html()
+    (an isolated iframe) cannot resolve by bare filename or relative path.
     """
-    # Get absolute path to video file
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    absolute_video_path = os.path.join(base_dir, video_path)
+    with open(video_path, "rb") as f:
+        video_bytes = f.read()
+    return base64.b64encode(video_bytes).decode("utf-8")
 
-    # Convert to relative path for web serving (Streamlit serves from root)
-    # We'll use the filename directly assuming it's in the project root
-    video_filename = os.path.basename(video_path)
 
-    # HTML/JavaScript component
+def attention_aware_video_player(
+    should_pause: bool,
+    status_message: str = "",
+    video_path: str = DEFAULT_VIDEO_PATH,
+    height: int = 380,
+):
+    """
+    Renders a full-featured video player (play/pause, seek bar, volume,
+    fullscreen - same controls as any standard HTML5 <video controls> player)
+    with an added attention-aware auto-pause overlay driven from Python.
+
+    should_pause: True to force-pause the video and show the overlay right now.
+    status_message: text shown inside the overlay when auto-paused.
+    video_path: absolute path to the video file.
+    height: pixel height of the rendered component.
+    """
+    if not os.path.exists(video_path):
+        st.error(f"Sample video not found at: {video_path}")
+        return
+
+    video_b64 = _load_video_base64(video_path)
+
+    lowered = status_message.lower()
+    if "dozed off" in lowered or "sleep" in lowered:
+        icon = "😴"
+    elif "distract" in lowered:
+        icon = "👀"
+    elif "no one" in lowered or "absent" in lowered:
+        icon = "🚶"
+    else:
+        icon = "⏸️"
+
+    safe_message = status_message.replace('"', "&quot;").replace("'", "&#39;")
+    pause_js = "true" if should_pause else "false"
+
     html_code = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            .video-container {{
-                position: relative;
-                width: 100%;
-                max-width: 800px;
-                margin: 0 auto;
-            }}
-            video {{
-                width: 100%;
-                height: auto;
-                border-radius: 10px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            }}
-            .overlay {{
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.7);
-                color: white;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                opacity: 0;
-                transition: opacity 0.5s ease;
-                border-radius: 10px;
-                pointer-events: none;
-                font-family: Arial, sans-serif;
-            }}
-            .overlay.show {{
-                opacity: 1;
-            }}
-            .overlay-icon {{
-                font-size: 48px;
-                margin-bottom: 20px;
-            }}
-            .overlay-text {{
-                font-size: 24px;
-                text-align: center;
-                max-width: 80%;
-                line-height: 1.4;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="video-container">
-            <video id="videoPlayer" playsinline>
-                <source src="{video_filename}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-            <div class="overlay" id="overlay">
-                <div class="overlay-icon" id="overlayIcon">⏸️</div>
-                <div class="overlay-text" id="overlayText">{status_message}</div>
-            </div>
+    <div style="position: relative; width: 100%; max-width: 560px; margin: 0 auto;">
+        <video id="attention-video" width="100%" controls playsinline
+               style="border-radius: 10px; display: block; box-shadow: 0 4px 10px rgba(0,0,0,0.25);">
+            <source src="data:video/mp4;base64,{video_b64}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div id="pause-overlay" style="
+                position: absolute; top: 0; left: 0; right: 0;
+                height: calc(100% - 40px);
+                background: rgba(0,0,0,0.75); color: white;
+                display: {"flex" if should_pause else "none"};
+                flex-direction: column; align-items: center; justify-content: center;
+                text-align: center; border-radius: 10px 10px 0 0; padding: 1rem;
+                box-sizing: border-box; pointer-events: none;
+                font-family: -apple-system, Segoe UI, Roboto, sans-serif;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">{icon}</div>
+            <div style="font-size: 1.05rem; font-weight: 600;">{safe_message}</div>
         </div>
+    </div>
 
-        <script>
-            // Get video and overlay elements
-            const video = document.getElementById("videoPlayer");
-            const overlay = document.getElementById("overlay");
-            const overlayIcon = document.getElementById("overlayIcon");
-            const overlayText = document.getElementById("overlayText");
+    <script>
+        (function() {{
+            const video = document.getElementById('attention-video');
+            const overlay = document.getElementById('pause-overlay');
+            const shouldPause = {pause_js};
+            if (!video) return;
 
-            // Set up video properties
-            video.muted = true;  // Start muted to avoid autoplay issues
-
-            // Function to update player state
-            function updatePlayerState(shouldPause, message) {{
-                if (shouldPause) {{
+            if (shouldPause) {{
+                // Auto-pause due to inattention. Remember that this pause was
+                // triggered by the system, not the user, so we know it's safe
+                // to auto-resume later.
+                if (!video.paused) {{
+                    video.dataset.autoPaused = "true";
                     video.pause();
-                    overlay.classList.add('show');
-                    overlayText.textContent = message;
-                    // Set icon based on message content
-                    if (message.includes('dozed off') || message.includes('Sleeping')) {{
-                        overlayIcon.textContent = '😴';
-                    }} else if (message.includes('distracted') || message.includes('Distracted')) {{
-                        overlayIcon.textContent = '👀';
-                    }} else if (message.includes('no one') || message.includes('watching')) {{
-                        overlayIcon.textContent = '🚶';
-                    }} else {{
-                        overlayIcon.textContent = '⏸️';
-                    }}
-                }} else {{
-                    video.play();
-                    overlay.classList.remove('show');
                 }}
+                overlay.style.display = 'flex';
+            }} else {{
+                overlay.style.display = 'none';
+                // Only auto-resume if WE paused it automatically. If the user
+                // manually paused the video themselves (dataset.autoPaused is
+                // not set), respect that and do not force it to play again.
+                if (video.paused && video.dataset.autoPaused === "true") {{
+                    video.play().catch(function(err) {{
+                        console.log('play() failed:', err);
+                    }});
+                }}
+                video.dataset.autoPaused = "false";
             }}
 
-            // Listen for messages from Streamlit
-            window.addEventListener('message', function(event) {{
-                // Only accept messages from ourselves (for security)
-                if (event.data && event.data.type === 'updatePlayer') {{
-                    updatePlayerState(event.data.shouldPause, event.data.message);
+            // If the user manually pauses/plays via the native controls,
+            // clear the auto-pause flag so we don't fight their choice.
+            video.onpause = function() {{
+                if (!shouldPause) {{
+                    video.dataset.autoPaused = "false";
                 }}
-            }});
-
-            // Initial state - try to play but most browsers require user interaction
-            // We'll start paused and wait for Streamlit to send the first update
-            video.pause();
-
-            // Send ready signal to Streamlit
-            window.parent.postMessage({{
-                type: 'componentReady'
-            }}, '*');
-        </script>
-    </body>
-    </html>
+            }};
+        }})();
+    </script>
     """
 
-    # We need to communicate with the component to update its state
-    # We'll use a placeholder approach where we re-render the entire component
-    # on each update (Streamlit's normal behavior)
-
-    # For now, let's create a simpler approach without complex JS communication
-    # We'll just re-render the HTML with the current state
-
-    # Simpler HTML that we can fully control via Streamlit re-render
-    simple_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            .video-container {{
-                position: relative;
-                width: 100%;
-                max-width: 800px;
-                margin: 0 auto;
-            }}
-            video {{
-                width: 100%;
-                height: auto;
-                border-radius: 10px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            }}
-            .overlay {{
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.7);
-                color: white;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                opacity: {1.0 if should_pause else 0.0};
-                transition: opacity 0.5s ease;
-                border-radius: 10px;
-                pointer-events: none;
-                font-family: Arial, sans-serif;
-            }}
-            .overlay-icon {{
-                font-size: 48px;
-                margin-bottom: 20px;
-            }}
-            .overlay-text {{
-                font-size: 24px;
-                text-align: center;
-                max-width: 80%;
-                line-height: 1.4;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="video-container">
-            <video id="videoPlayer" playsinline {"muted" if should_pause else ""}>
-                <source src="{video_filename}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-            <div class="overlay">
-                <div class="overlay-icon">{"😴" if "dozed off" in status_message.lower() or "sleeping" in status_message.lower()
-                                      else "👀" if "distracted" in status_message.lower()
-                                      else "🚶" if "no one" in status_message.lower() or "watching" in status_message.lower()
-                                      else "⏸️"}</div>
-                <div class="overlay-text">{status_message}</div>
-            </div>
-        </div>
-        <script>
-            const video = document.getElementById("videoPlayer");
-            {"video.pause();" if should_pause else "video.play();"}
-        </script>
-    </body>
-    </html>
-    """
-
-    # Render the component
-    components.html(simple_html, height=500)
+    components.html(html_code, height=height)
