@@ -66,8 +66,8 @@ def render_attention_tab():
         )
 
         # Display status
-        if webrtc_ctx.video_processor:
-            status = webrtc_ctx.video_transformer.latest_status
+        if webrtc_ctx.video_processor is not None and webrtc_ctx.state.playing:
+            status = webrtc_ctx.video_processor.latest_status
             # Status display with emoji and color
             if status == "OK":
                 st.success(f"Status: Watching normally ✅")
@@ -82,9 +82,9 @@ def render_attention_tab():
 
             # Optional: Show debug values
             with st.expander("Debug Values"):
-                transformer = webrtc_ctx.video_transformer
-                st.write(f"EAR: {transformer.latest_ear:.3f}")
-                st.write(f"Head Pose: {transformer.latest_head_pose:.3f}")
+                processor = webrtc_ctx.video_processor
+                st.write(f"EAR: {processor.latest_ear:.3f}")
+                st.write(f"Head Pose: {processor.latest_head_pose:.3f}")
         else:
             st.info("Starting webcam... Please wait for the stream to initialize.")
 
@@ -94,8 +94,8 @@ def render_attention_tab():
         should_pause = False
         status_message = ""
 
-        if webrtc_ctx.video_transformer:
-            status = webrtc_ctx.video_transformer.latest_status
+        if webrtc_ctx.video_processor is not None and webrtc_ctx.state.playing:
+            status = webrtc_ctx.video_processor.latest_status
             if status == "SLEEPING":
                 should_pause = True
                 status_message = "😴 Paused — you seem to have dozed off"
