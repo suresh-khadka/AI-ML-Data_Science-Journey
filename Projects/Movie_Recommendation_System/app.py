@@ -167,3 +167,74 @@ with tab2:
                 st.caption(f"⏱️ {timings['total']:.1f}s via {timings['provider']} "f"(retrieval: {timings['retrieval']:.1f}s, generation: {timings['gemini_call']:.1f}s)")
         # Add assistant message to chat history
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
+
+
+
+
+#game 
+from guess_game import load_game_data, get_blurred_poster, get_visual_hint, start_new_round
+
+playable_movies, poster_embeddings = load_game_data()
+
+tab1, tab2, tab3, tab4 = st.tabs(["🎬 Recommender", "💬 Ask about movies", "🎮 Guess the Movie", "🎥 Attention-Aware Playback"])
+
+with tab3:
+    st.subheader("Guess the Movie from its Poster")
+
+    if 'game_movie_id' not in st.session_state:
+        start_new_round(playable_movies)
+
+    img = get_blurred_poster(st.session_state.game_movie_id, st.session_state.game_reveal_level)
+    st.image(img, width=300)
+
+    if not st.session_state.game_won:
+        guess = st.text_input("Your guess:", key="guess_input")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button("Submit Guess"):
+                if guess.strip().lower() == st.session_state.game_movie_title.lower():
+                    st.session_state.game_won = True
+                    st.success(f"Correct! It was {st.session_state.game_movie_title} "
+                               f"in {st.session_state.game_guesses + 1} guess(es).")
+                else:
+                    st.session_state.game_guesses += 1
+                    st.session_state.game_reveal_level = min(4, st.session_state.game_reveal_level + 1)
+                    st.error("Not quite — here's a clearer look.")
+
+        with col2:
+            if st.button("Get a Hint") and not st.session_state.game_hint_used:
+                hint_title = get_visual_hint(st.session_state.game_movie_id, poster_embeddings, playable_movies)
+                st.session_state.game_hint_used = True
+                if hint_title:
+                    st.info(f"Visual hint: its poster style is similar to **{hint_title}**.")
+
+        with col3:
+            if st.button("Give Up"):
+                st.warning(f"The movie was: {st.session_state.game_movie_title}")
+                st.session_state.game_won = True
+
+    if st.session_state.game_won:
+        if st.button("Play Again"):
+            start_new_round(playable_movies)
+            st.rerun()
+
+# Attention-Aware Playback tab
+with tab4:
+    try:
+        from attention_tab import render_attention_tab
+        render_attention_tab()
+    except ImportError as e:
+        st.error("""
+        Unable to load the Attention-Aware Playback feature.
+        Please ensure the required dependencies are installed:
+        - mediapipe
+        - streamlit-webrtc
+        - opencv-python-headless
+        - av
+        - numpy
+
+        You can install them with:
+        pip install mediapipe streamlit-webrtc opencv-python-headless av numpy
+        """)
+        st.info("Or run: pip install -r requirements-attention.txt (if you have created one)")
