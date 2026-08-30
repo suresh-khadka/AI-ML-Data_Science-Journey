@@ -224,17 +224,7 @@ with tab4:
     try:
         from attention_tab import render_attention_tab
         render_attention_tab()
-    except ImportError as e:
-        st.error("""
-        Unable to load the Attention-Aware Playback feature.
-        Please ensure the required dependencies are installed:
-        - mediapipe
-        - streamlit-webrtc
-        - opencv-python-headless
-        - av
-        - numpy
-
-        You can install them with:
-        pip install mediapipe streamlit-webrtc opencv-python-headless av numpy
-        """)
-        st.info("Or run: pip install -r requirements-attention.txt (if you have created one)")
+    except Exception as e:
+        import traceback
+        st.error(f"Attention tab failed: {e}")
+        st.code(traceback.format_exc())

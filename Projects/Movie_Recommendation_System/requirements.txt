@@ -10,3 +10,8 @@ requests
 rapidfuzz
 torchvision
 torch
+mediapipe==0.10.35
+streamlit-webrtc
+opencv-python-headless
+av
+numpy
