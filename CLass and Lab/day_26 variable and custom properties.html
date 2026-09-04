@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>variable and custom properties</title>
+</head>
+<style>
+    :root{
+        --box-color: rgb(23, 177, 113) ;
+    }
+    .box{
+        width: 200px;
+        height: 200px;
+        /* background-color: aqua; */
+        border: 2px solid red;
+        margin: 2px 2px;
+        background-color: var(--box-color) ;
+        box-shadow: 3px 3px var(--box-color);
+
+    }
+    .container{
+        max-width: 733px;   
+        /* max width vanda badi jhanna */
+        margin: auto;
+        border: 2px solid red;
+        display: flex;
+        justify-content: center; 
+        height: 500px;   
+        width: 100%;
+        align-items: center; 
+    } 
+</style>
+<body>
+    <div class="container">
+        <div class="box">suresh</div>
+        <div class="box"></div>
+        <div class="box"></div>
+    </div>
+</body>
+</html>
