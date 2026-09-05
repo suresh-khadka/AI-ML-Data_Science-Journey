@@ -1,0 +1,15 @@
+feature_engineering/creditcard.csv
+feature_engineering/creditcard.csv
+.env            
+*.pkl           
+*.csv            
+*.ipynb_checkpoints/
+*.index         
+__pycache__/    
+venv/           
+.pkl 
+.ipynb_checkpoints/          
+      
+*.svg
+*.pdf
+*.html
