@@ -146,7 +146,7 @@ def retrieve_movies(question, top_k=20):
                 lo, hi = min(years), max(years)
             filtered_meta = filtered_meta[
                 filtered_meta['release_date'].astype(str).str[:4].apply(
-                    lambda y: y.isdigit() and lo <= int(y) <= hi
+                    lambda y: isinstance(y, str) and y.isdigit() and lo <= int(y) <= hi
                 )
             ]
 

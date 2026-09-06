@@ -176,7 +176,7 @@ from guess_game import load_game_data, get_blurred_poster, get_visual_hint, star
 
 playable_movies, poster_embeddings = load_game_data()
 
-tab1, tab2, tab3, tab4 = st.tabs(["🎬 Recommender", "💬 Ask about movies", "🎮 Guess the Movie", "🎥 Attention-Aware Playback"])
+tab1, tab2, tab3, tab4 = st.tabs(["🎬 Recommender", "💬 Ask about movies","", "🎥 Attention-Aware Playback"])
 
 with tab3:
     st.subheader("Guess the Movie from its Poster")
